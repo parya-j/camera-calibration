@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 import numpy as np
 import cv2
@@ -6,30 +7,25 @@ import argparse
 import yaml
 import pickle
 from glob import glob
-from cv2 import __version__
-__version__
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Calibrate camera using a video of a chessboard or a sequence of images.')
     parser.add_argument('input', help='input video file or glob mask')
     parser.add_argument('out', help='output calibration yaml file')
+    parser.add_argument('--debug-dir', help='path to directory where images with detected chessboard will be written',
+                        default=None)
+    parser.add_argument('-c', '--corners', help='output corners file', default=None)
+    parser.add_argument('-fs', '--framestep', help='use every nth frame in the video', default=20, type=int)
+    # parser.add_argument('--figure', help='saved visualization name', default=None)
     args = parser.parse_args()
-
 
     if '*' in args.input:
         source = glob(args.input)
     else:
         source = cv2.VideoCapture(args.input)
+    # square_size = float(args.get('--square_size', 1.0))
 
-    if( source.isOpened() ):
-        print ('is Open ')    
-    else :
-        print( 'not open' )
-
-    print( args.input )
-    print( args.out )
-
-    pattern_size = (7, 5)
+    pattern_size = (9, 6)
     pattern_points = np.zeros((np.prod(pattern_size), 3), np.float32)
     pattern_points[:, :2] = np.indices(pattern_size).T.reshape(-1, 2)
     # pattern_points *= square_size
@@ -45,12 +41,9 @@ if __name__ == '__main__':
             if i == len(source):
                 break
             img = cv2.imread(source[i])
-            print( img )
         else:
             # cv2.VideoCapture
-            
             retval, img = source.read()
-            print ( retval )
             if not retval:
                 break
             if i % args.framestep != 0:
@@ -80,13 +73,28 @@ if __name__ == '__main__':
             pickle.dump(img_points, fw)
             pickle.dump(obj_points, fw)
             pickle.dump((w, h), fw)
+        
+# load corners
+#    with open('corners.pkl', 'rb') as fr:
+#        img_points = pickle.load(fr)
+#        obj_points = pickle.load(fr)
+#        w, h = pickle.load(fr)
 
-    
     print('\nPerforming calibration...')
     rms, camera_matrix, dist_coefs, rvecs, tvecs = cv2.calibrateCamera(obj_points, img_points, (w, h), None, None)
     print ("RMS:", rms)
     print ("camera matrix:\n", camera_matrix)
     print ("distortion coefficients: ", dist_coefs.ravel())
+
+    # # fisheye calibration
+    # rms, camera_matrix, dist_coefs, rvecs, tvecs = cv2.fisheye.calibrate(
+    #     obj_points, img_points,
+    #     (w, h), camera_matrix, np.array([0., 0., 0., 0.]),
+    #     None, None,
+    #     cv2.fisheye.CALIB_USE_INTRINSIC_GUESS, (3, 1, 1e-6))
+    # print "RMS:", rms
+    # print "camera matrix:\n", camera_matrix
+    # print "distortion coefficients: ", dist_coefs.ravel()
 
     calibration = {'rms': rms, 'camera_matrix': camera_matrix.tolist(), 'dist_coefs': dist_coefs.tolist() }
     with open(args.out, 'w') as fw:
